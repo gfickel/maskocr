@@ -4,7 +4,6 @@ import time
 import types
 
 from tqdm import tqdm
-import dlib
 import wandb
 import schedulefree
 import torch
@@ -20,15 +19,9 @@ from fastcore.basics import store_attr
 
 from utils import *
 from vit_mae import ViT, MAE
-# from dlib_loss_plateu import is_in_plateau
 
 
 device = torch.device(f'cuda' if torch.cuda.is_available() else 'cpu')
-
-def is_in_plateau(vec, threshold):
-    dlib_simple = dlib.count_steps_without_decrease(vec)
-    dlib_robust = dlib.count_steps_without_decrease_robust(vec)
-    return dlib_simple > threshold and dlib_robust > threshold
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len):

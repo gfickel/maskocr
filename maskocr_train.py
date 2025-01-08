@@ -1,23 +1,14 @@
 import os
 import argparse
 import json
-import random
 
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torchvision import transforms
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-import matplotlib.pyplot as plt
-import wandb
 
 from utils import *
 from dataloader import ALPRDataset, create_ocr_transform
 from maskocr import *
-
-# Set up interactive mode
-plt.ion()
-
 
 
 def parse_arguments():
@@ -70,9 +61,9 @@ def main():
     vocab = FULL_ALPHABET
     vocab_size = len(vocab)+1
 
-    model = MaskOCR(cfg.img_height, cfg.img_width, cfg.patch_size, cfg.embed_dim, cfg.num_heads, cfg.num_encoder_layers,
-                    cfg.num_decoder_layers, vocab_size, cfg.max_sequence_length, dropout=cfg.dropout, emb_dropout=cfg.emb_dropout,
-                    overlap=cfg.overlap)
+    model = MaskOCR(cfg.img_height, cfg.img_width, cfg.patch_size, cfg.embed_dim, cfg.num_heads,
+                    cfg.num_encoder_layers, cfg.num_decoder_layers, vocab_size, cfg.max_sequence_length,
+                    dropout=cfg.dropout, emb_dropout=cfg.emb_dropout, overlap=cfg.overlap)
 
     val_data_transform = transforms.Compose([
         transforms.ToTensor(),
@@ -97,7 +88,8 @@ def main():
         os.path.join(cfg.dataset_path, val_ds, 'alpr_annotation.csv'),
         os.path.join(cfg.dataset_path, val_ds),
         val_data_transform, ds_frac=cfg.ds_frac)
-    val_dataloader = DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=True, pin_memory=True, num_workers=1, drop_last=False)
+    val_dataloader = DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=True,
+                                pin_memory=True, num_workers=1, drop_last=False)
 
     # summary(model, input_size=(2, 3, cfg.img_height, cfg.img_width), depth=5)
 
@@ -106,13 +98,14 @@ def main():
                 start_lr=cfg.start_lr, min_lr=cfg.min_lr, plateau_threshold=cfg.plateau_thr, use_wandb=cfg.wandb,
                 use_schedulefree=cfg.schedulefree, config=cfg)
     
-    # Then, train for text recognition
+    # Then, train for text recognition first by freezing the encoder for half epochs
     train_model(f'maskocr', model, train_text_recognition, train_dataloader, val_dataloader, device, vocab,
                 model_name=f'train_text_recognition_freeze_{cfg.version}', num_epochs=max(1,cfg.epochs//2), freeze_encoder=True,
                 version=cfg.version, start_lr=cfg.start_lr, min_lr=cfg.min_lr, plateau_threshold=cfg.plateau_thr, use_wandb=cfg.wandb,
                 use_schedulefree=cfg.schedulefree, weight_decay=0, config=cfg)
+    # And now train the whole network
     train_model(f'maskocr', model, train_text_recognition, train_dataloader, val_dataloader, device, vocab,
-                model_name=f'train_text_recognition_full_1_{cfg.version}', num_epochs=max(1,cfg.epochs), freeze_encoder=False,
+                model_name=f'train_text_recognition_full_{cfg.version}', num_epochs=max(1,cfg.epochs), freeze_encoder=False,
                 version=cfg.version, start_lr=cfg.start_lr, min_lr=cfg.min_lr, plateau_threshold=cfg.plateau_thr, use_wandb=cfg.wandb,
                 use_schedulefree=cfg.schedulefree, weight_decay=cfg.weight_decay, config=cfg)
     torch.save(model.state_dict(), f'model_bin/my_model_{cfg.version}.pth')
